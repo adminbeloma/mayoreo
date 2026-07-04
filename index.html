@@ -526,7 +526,7 @@
       <div class="card">
         <p class="hint">SKU generado por combinación de marca/tipo/talla/color. Alerta en rojo cuando el stock llega al mínimo.</p>
         <table>
-          <thead><tr><th>SKU</th><th>Producto</th><th>Talla/Color</th><th>Stock</th><th>Mínimo</th><th>Precio mayoreo</th><th></th></tr></thead>
+          <thead><tr><th>SKU</th><th>Producto</th><th>Talla/Color</th><th>Stock</th><th>Mínimo</th><th>Menudeo / Mayoreo</th><th></th></tr></thead>
           <tbody id="tabla-productos">
             <tr><td colspan="7" class="empty-state">Cargando productos…</td></tr>
           </tbody>
@@ -605,9 +605,15 @@
           </div>
         </div>
 
-        <div class="field">
-          <label>Precio mayoreo (MXN)</label>
-          <input type="number" id="producto-precio" placeholder="0" min="0">
+        <div class="field-row">
+          <div class="field">
+            <label>Precio menudeo (1-11 pzs)</label>
+            <input type="number" id="producto-precio-menudeo" placeholder="0" min="0">
+          </div>
+          <div class="field">
+            <label>Precio mayoreo (12+ pzs)</label>
+            <input type="number" id="producto-precio" placeholder="0" min="0">
+          </div>
         </div>
 
         <div class="modal-actions">
@@ -1237,6 +1243,17 @@ function generarSKU(p){
   return [parte(p.marca), parte(p.genero), parte(p.talla), parte(p.color)].filter(Boolean).join('-');
 }
 
+const UMBRAL_MAYOREO = 12;
+
+function precioSegunCantidad(producto, cantidad){
+  if (!producto) return 0;
+  const esMayoreo = (Number(cantidad) || 0) >= UMBRAL_MAYOREO;
+  if (esMayoreo){
+    return Number(producto.precio_mayoreo) || Number(producto.precio_menudeo) || 0;
+  }
+  return Number(producto.precio_menudeo) || Number(producto.precio_mayoreo) || 0;
+}
+
 function pintarTablaProductos(){
   const tbody = document.getElementById('tabla-productos');
   const ids = Object.keys(productosCache);
@@ -1260,7 +1277,7 @@ function pintarTablaProductos(){
         <td>${p.talla || '—'} / ${p.color || '—'}</td>
         <td>${stockBajo ? `<span class="badge saldo">${stock}</span>` : stock}</td>
         <td>${minimo}</td>
-        <td>${formatoMoneda(p.precio_mayoreo)}</td>
+        <td>${formatoMoneda(p.precio_menudeo)} <span style="color:var(--text-muted);">/</span> ${formatoMoneda(p.precio_mayoreo)}</td>
         <td class="row-actions">
           <button class="link-btn" onclick="window.editarProducto('${id}')">Editar</button>
         </td>
@@ -1292,6 +1309,7 @@ function limpiarFormularioProducto(){
   document.getElementById('producto-tipo-prenda').value = 'cuello_redondo';
   document.getElementById('producto-stock').value = '';
   document.getElementById('producto-stock-minimo').value = '';
+  document.getElementById('producto-precio-menudeo').value = '';
   document.getElementById('producto-precio').value = '';
 }
 
@@ -1315,6 +1333,7 @@ window.editarProducto = function(id){
   document.getElementById('producto-tipo-prenda').value = p.tipo_prenda || 'cuello_redondo';
   document.getElementById('producto-stock').value = p.stock || '';
   document.getElementById('producto-stock-minimo').value = p.stock_minimo || '';
+  document.getElementById('producto-precio-menudeo').value = p.precio_menudeo || p.precio_mayoreo || '';
   document.getElementById('producto-precio').value = p.precio_mayoreo || '';
 
   document.getElementById('modal-producto-titulo').textContent = 'Editar producto';
@@ -1348,6 +1367,7 @@ window.guardarProducto = async function(){
       tipo_prenda: document.getElementById('producto-tipo-prenda').value,
       stock: Number(document.getElementById('producto-stock').value) || 0,
       stock_minimo: Number(document.getElementById('producto-stock-minimo').value) || 0,
+      precio_menudeo: Number(document.getElementById('producto-precio-menudeo').value) || 0,
       precio_mayoreo: Number(document.getElementById('producto-precio').value) || 0,
       actualizado: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -1414,6 +1434,7 @@ window.buscarProductoPorSKU = function(){
 
   if (existente){
     existente.cantidad += cantidad;
+    existente.precio_unitario = precioSegunCantidad(p, existente.cantidad);
   } else {
     carritoVenta.push({
       producto_id: productoId,
@@ -1425,12 +1446,14 @@ window.buscarProductoPorSKU = function(){
       talla: p.talla,
       material: p.material,
       cantidad: cantidad,
-      precio_unitario: Number(p.precio_mayoreo) || 0
+      precio_unitario: precioSegunCantidad(p, cantidad)
     });
   }
 
+  const lineaActualizada = existente || carritoVenta[carritoVenta.length - 1];
+  const tierTexto = lineaActualizada.cantidad >= UMBRAL_MAYOREO ? 'precio mayoreo' : 'precio menudeo';
   resultado.style.color = 'var(--green)';
-  resultado.textContent = `Agregado: ${p.nombre} (${p.talla || ''}/${p.color || ''}) · ${formatoMoneda(p.precio_mayoreo)}`;
+  resultado.textContent = `Agregado: ${p.nombre} (${p.talla || ''}/${p.color || ''}) · ${formatoMoneda(lineaActualizada.precio_unitario)} (${tierTexto})`;
   skuInput.value = '';
   document.getElementById('venta-sku-cantidad').value = '1';
   skuInput.focus();
@@ -1449,7 +1472,7 @@ function pintarCarritoVenta(){
         <td>${it.sku || '—'}</td>
         <td>${it.nombre}</td>
         <td>${it.cantidad}</td>
-        <td>${formatoMoneda(it.precio_unitario)}</td>
+        <td>${formatoMoneda(it.precio_unitario)}<br><span style="color:var(--text-muted);font-size:11px;">${it.cantidad >= UMBRAL_MAYOREO ? 'mayoreo' : 'menudeo'}</span></td>
         <td>${formatoMoneda(it.cantidad * it.precio_unitario)}</td>
         <td class="row-actions"><button class="link-btn" onclick="window.quitarDeCarritoVenta(${idx})">Quitar</button></td>
       </tr>
@@ -1684,7 +1707,8 @@ function opcionesProductosHTML(){
   return Object.keys(productosCache).map(id => {
     const p = productosCache[id];
     return `<option value="${id}"
-      data-precio="${p.precio_mayoreo || 0}"
+      data-precio-menudeo="${p.precio_menudeo || p.precio_mayoreo || 0}"
+      data-precio-mayoreo="${p.precio_mayoreo || p.precio_menudeo || 0}"
       data-genero="${p.genero || ''}"
       data-color="${p.color || ''}"
       data-talla="${p.talla || ''}"
@@ -1712,7 +1736,7 @@ function filaLineaCotizacion(item){
       </select>
     </div>
     <div class="field qty">
-      <input type="number" min="1" value="${cantidad}" onchange="window.recalcularTotalCotizacion()">
+      <input type="number" min="1" value="${cantidad}" onchange="window.actualizarPrecioLinea('${rowId}')">
     </div>
     <div class="field price">
       <input type="number" min="0" value="${precio}" onchange="window.recalcularTotalCotizacion()">
@@ -1741,9 +1765,20 @@ window.quitarLineaCotizacion = function(rowId){
 window.actualizarPrecioLinea = function(rowId){
   const row = document.getElementById(rowId);
   const select = row.querySelector('select');
+  const cantidadInput = row.querySelector('.qty input');
   const precioInput = row.querySelector('.price input');
   const opcion = select.options[select.selectedIndex];
-  precioInput.value = opcion ? (opcion.dataset.precio || 0) : 0;
+
+  if (opcion && opcion.value){
+    const cantidad = Number(cantidadInput.value) || 1;
+    const esMayoreo = cantidad >= UMBRAL_MAYOREO;
+    precioInput.value = esMayoreo
+      ? (opcion.dataset.precioMayoreo || 0)
+      : (opcion.dataset.precioMenudeo || 0);
+  } else {
+    precioInput.value = 0;
+  }
+
   window.recalcularTotalCotizacion();
 };
 
