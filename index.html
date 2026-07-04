@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <style>
   :root{
@@ -156,6 +157,80 @@
   .view{display:none;}
   .view.active{display:block;}
 
+  /* ---------- modal ---------- */
+  .modal-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.4);
+    z-index:100;
+    align-items:flex-start;
+    justify-content:center;
+    padding:40px 16px;
+    overflow-y:auto;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    background:var(--panel);
+    border-radius:var(--radius);
+    width:100%;
+    max-width:520px;
+    padding:24px;
+  }
+  .modal h3{margin:0 0 18px;font-size:16px;}
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    margin-bottom:5px;
+  }
+  .field input[type=text],
+  .field input[type=tel],
+  .field input[type=email],
+  .field input[type=number],
+  .field select{
+    width:100%;
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size:13px;
+    font-family:inherit;
+  }
+  .field-row{display:flex;gap:12px;}
+  .field-row .field{flex:1;}
+  .checkbox-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13px;
+    margin-bottom:14px;
+  }
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:20px;
+  }
+  .file-hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+  .file-current{
+    font-size:12px;
+    color:var(--accent);
+    margin-top:4px;
+  }
+  .row-actions{
+    display:flex;
+    gap:8px;
+  }
+  .link-btn{
+    background:none;
+    border:none;
+    color:var(--accent);
+    font-size:12px;
+    cursor:pointer;
+    padding:0;
+  }
+
   @media (max-width:800px){
     #sidebar{position:fixed;z-index:10;height:100vh;transform:translateX(-100%);transition:transform .2s;}
     #sidebar.open{transform:translateX(0);}
@@ -231,17 +306,89 @@
     <!-- ---------- CLIENTES ---------- -->
     <section class="view" id="view-clientes">
       <div id="topbar">
-        <h2>Clientes mayoristas</h2>
+        <h2>Clientes</h2>
         <button class="btn" onclick="window.abrirNuevoCliente()">+ Nuevo cliente</button>
       </div>
       <div class="card">
-        <p class="hint">Comparte la misma colección de clientes que el admin principal. Aquí se agrega tipo (mayorista/medio mayoreo/menudeo), lista de precios y límite de crédito.</p>
+        <p class="hint">Misma colección de clientes que el admin principal, con tipo mayorista/lista de precios/límite de crédito agregados.</p>
         <table>
-          <thead><tr><th>Nombre</th><th>Tipo</th><th>Lista de precios</th><th>Límite crédito</th><th>Saldo actual</th></tr></thead>
-          <tbody><tr><td colspan="5" class="empty-state">Conectar a colección "clientes" de Firestore</td></tr></tbody>
+          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Tipo</th><th>Lista precios</th><th>Límite crédito</th><th>Factura</th><th></th></tr></thead>
+          <tbody id="tabla-clientes">
+            <tr><td colspan="7" class="empty-state">Cargando clientes…</td></tr>
+          </tbody>
         </table>
       </div>
     </section>
+
+    <!-- ---------- MODAL CLIENTE ---------- -->
+    <div class="modal-overlay" id="modal-cliente">
+      <div class="modal">
+        <h3 id="modal-cliente-titulo">Nuevo cliente</h3>
+        <input type="hidden" id="cliente-id">
+
+        <div class="field">
+          <label>Nombre *</label>
+          <input type="text" id="cliente-nombre" placeholder="Nombre o razón social">
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Teléfono</label>
+            <input type="tel" id="cliente-telefono" placeholder="669 000 0000">
+          </div>
+          <div class="field">
+            <label>Correo electrónico</label>
+            <input type="email" id="cliente-correo" placeholder="cliente@correo.com">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Domicilio</label>
+          <input type="text" id="cliente-domicilio" placeholder="Calle, número, colonia, ciudad">
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Tipo de cliente</label>
+            <select id="cliente-tipo">
+              <option value="menudeo">Menudeo</option>
+              <option value="medio_mayoreo">Medio mayoreo</option>
+              <option value="mayorista">Mayorista</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Lista de precios</label>
+            <select id="cliente-lista-precios">
+              <option value="publico">Público</option>
+              <option value="mayoreo_a">Mayoreo A</option>
+              <option value="mayoreo_b">Mayoreo B</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Límite de crédito (MXN)</label>
+          <input type="number" id="cliente-limite-credito" placeholder="0" min="0">
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="cliente-factura">
+          <label for="cliente-factura" style="margin:0;font-weight:400;">Requiere factura</label>
+        </div>
+
+        <div class="field" id="campo-constancia">
+          <label>Constancia de situación fiscal (PDF)</label>
+          <input type="file" id="cliente-constancia-file" accept="application/pdf">
+          <div class="file-hint">Se sube solo si el cliente requiere factura</div>
+          <div class="file-current" id="cliente-constancia-actual"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn secondary" onclick="window.cerrarModalCliente()">Cancelar</button>
+          <button class="btn" id="btn-guardar-cliente" onclick="window.guardarCliente()">Guardar cliente</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ---------- CATALOGO / INVENTARIO ---------- -->
     <section class="view" id="view-catalogo">
@@ -352,6 +499,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const storage = firebase.storage();
 
 // ============================================================
 // NAVEGACIÓN
@@ -365,11 +513,171 @@ window.mostrarVista = function(viewName){
 };
 
 // ============================================================
+// CLIENTES — CRUD real contra la colección "clientes" de Firestore
+// ============================================================
+const clientesCache = {};
+
+function formatoMoneda(valor){
+  const n = Number(valor) || 0;
+  return '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 0 });
+}
+
+function etiquetaTipo(tipo){
+  const mapa = { menudeo: 'Menudeo', medio_mayoreo: 'Medio mayoreo', mayorista: 'Mayorista' };
+  return mapa[tipo] || 'Menudeo';
+}
+
+function etiquetaLista(lista){
+  const mapa = { publico: 'Público', mayoreo_a: 'Mayoreo A', mayoreo_b: 'Mayoreo B' };
+  return mapa[lista] || 'Público';
+}
+
+function pintarTablaClientes(){
+  const tbody = document.getElementById('tabla-clientes');
+  const ids = Object.keys(clientesCache);
+
+  if (ids.length === 0){
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Sin clientes registrados todavía</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ids.map(id => {
+    const c = clientesCache[id];
+    return `
+      <tr>
+        <td>${c.nombre || '—'}</td>
+        <td>${c.telefono || '—'}</td>
+        <td>${etiquetaTipo(c.tipo_cliente)}</td>
+        <td>${etiquetaLista(c.lista_precios)}</td>
+        <td>${formatoMoneda(c.limite_credito)}</td>
+        <td>${c.factura ? 'Sí' : 'No'}</td>
+        <td class="row-actions">
+          <button class="link-btn" onclick="window.editarCliente('${id}')">Editar</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function cargarClientes(){
+  db.collection('clientes').orderBy('nombre').onSnapshot(snapshot => {
+    Object.keys(clientesCache).forEach(k => delete clientesCache[k]);
+    snapshot.forEach(doc => { clientesCache[doc.id] = doc.data(); });
+    pintarTablaClientes();
+  }, err => {
+    console.error('Error cargando clientes:', err);
+    document.getElementById('tabla-clientes').innerHTML =
+      '<tr><td colspan="7" class="empty-state">Error al cargar clientes — revisa la consola</td></tr>';
+  });
+}
+
+function limpiarFormularioCliente(){
+  document.getElementById('cliente-id').value = '';
+  document.getElementById('cliente-nombre').value = '';
+  document.getElementById('cliente-telefono').value = '';
+  document.getElementById('cliente-correo').value = '';
+  document.getElementById('cliente-domicilio').value = '';
+  document.getElementById('cliente-tipo').value = 'menudeo';
+  document.getElementById('cliente-lista-precios').value = 'publico';
+  document.getElementById('cliente-limite-credito').value = '';
+  document.getElementById('cliente-factura').checked = false;
+  document.getElementById('cliente-constancia-file').value = '';
+  document.getElementById('cliente-constancia-actual').textContent = '';
+}
+
+window.abrirNuevoCliente = function(){
+  limpiarFormularioCliente();
+  document.getElementById('modal-cliente-titulo').textContent = 'Nuevo cliente';
+  document.getElementById('modal-cliente').classList.add('open');
+};
+
+window.editarCliente = function(id){
+  const c = clientesCache[id];
+  if (!c) return;
+
+  document.getElementById('cliente-id').value = id;
+  document.getElementById('cliente-nombre').value = c.nombre || '';
+  document.getElementById('cliente-telefono').value = c.telefono || '';
+  document.getElementById('cliente-correo').value = c.correo || '';
+  document.getElementById('cliente-domicilio').value = c.domicilio || '';
+  document.getElementById('cliente-tipo').value = c.tipo_cliente || 'menudeo';
+  document.getElementById('cliente-lista-precios').value = c.lista_precios || 'publico';
+  document.getElementById('cliente-limite-credito').value = c.limite_credito || '';
+  document.getElementById('cliente-factura').checked = !!c.factura;
+  document.getElementById('cliente-constancia-file').value = '';
+  document.getElementById('cliente-constancia-actual').textContent = c.constancia_url
+    ? 'Ya tiene constancia subida — selecciona otro PDF solo si la quieres reemplazar'
+    : '';
+
+  document.getElementById('modal-cliente-titulo').textContent = 'Editar cliente';
+  document.getElementById('modal-cliente').classList.add('open');
+};
+
+window.cerrarModalCliente = function(){
+  document.getElementById('modal-cliente').classList.remove('open');
+};
+
+window.guardarCliente = async function(){
+  const nombre = document.getElementById('cliente-nombre').value.trim();
+  if (!nombre){
+    alert('El nombre es obligatorio');
+    return;
+  }
+
+  const btn = document.getElementById('btn-guardar-cliente');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+
+  try {
+    const id = document.getElementById('cliente-id').value;
+    const datos = {
+      nombre: nombre,
+      telefono: document.getElementById('cliente-telefono').value.trim(),
+      correo: document.getElementById('cliente-correo').value.trim(),
+      domicilio: document.getElementById('cliente-domicilio').value.trim(),
+      tipo_cliente: document.getElementById('cliente-tipo').value,
+      lista_precios: document.getElementById('cliente-lista-precios').value,
+      limite_credito: Number(document.getElementById('cliente-limite-credito').value) || 0,
+      factura: document.getElementById('cliente-factura').checked,
+      actualizado: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    const archivo = document.getElementById('cliente-constancia-file').files[0];
+    let docRef;
+
+    if (id){
+      docRef = db.collection('clientes').doc(id);
+      await docRef.update(datos);
+    } else {
+      datos.saldo_actual = 0;
+      datos.creado = firebase.firestore.FieldValue.serverTimestamp();
+      docRef = await db.collection('clientes').add(datos);
+    }
+
+    // Subir constancia SAT si se seleccionó un archivo
+    if (archivo){
+      const ruta = `clientes/${docRef.id}/constancia_sat.pdf`;
+      const ref = storage.ref(ruta);
+      await ref.put(archivo);
+      const url = await ref.getDownloadURL();
+      await docRef.update({ constancia_url: url });
+    }
+
+    window.cerrarModalCliente();
+  } catch (err){
+    console.error('Error guardando cliente:', err);
+    alert('No se pudo guardar el cliente. Revisa la consola para más detalle.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar cliente';
+  }
+};
+
+cargarClientes();
+
+// ============================================================
 // PLACEHOLDERS — cada uno se conecta después a su colección
 // ============================================================
-window.abrirNuevoCliente = function(){
-  alert('Pendiente: formulario de nuevo cliente mayorista');
-};
 window.abrirNuevoProducto = function(){
   alert('Pendiente: formulario de nuevo producto/SKU');
 };
@@ -397,7 +705,12 @@ async function cargarKPIs(){
   document.getElementById('kpi-pedidos-abiertos').textContent = '0';
   document.getElementById('kpi-por-cobrar').textContent = '$0';
   document.getElementById('kpi-vencido').textContent = '$0';
-  document.getElementById('kpi-clientes-activos').textContent = '0';
+  try {
+    const snap = await db.collection('clientes').get();
+    document.getElementById('kpi-clientes-activos').textContent = snap.size;
+  } catch (err){
+    document.getElementById('kpi-clientes-activos').textContent = '0';
+  }
 }
 cargarKPIs();
 </script>
