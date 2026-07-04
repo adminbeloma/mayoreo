@@ -230,6 +230,40 @@
     cursor:pointer;
     padding:0;
   }
+  .modal.wide{max-width:680px;}
+  .item-row{
+    display:flex;
+    gap:8px;
+    align-items:flex-end;
+    margin-bottom:10px;
+  }
+  .item-row .field{margin-bottom:0;flex:1;}
+  .item-row .field.qty{flex:0 0 70px;}
+  .item-row .field.price{flex:0 0 100px;}
+  .item-row .subtotal{
+    flex:0 0 90px;
+    font-size:13px;
+    font-weight:600;
+    text-align:right;
+    padding-bottom:8px;
+  }
+  .item-row .remove-item{
+    flex:0 0 24px;
+    color:var(--red);
+    cursor:pointer;
+    font-size:16px;
+    padding-bottom:6px;
+  }
+  .items-total{
+    display:flex;
+    justify-content:flex-end;
+    gap:16px;
+    padding-top:10px;
+    margin-top:8px;
+    border-top:1px solid var(--border);
+    font-size:15px;
+    font-weight:600;
+  }
 
   @media (max-width:800px){
     #sidebar{position:fixed;z-index:10;height:100vh;transform:translateX(-100%);transition:transform .2s;}
@@ -485,32 +519,79 @@
         <button class="btn" onclick="window.abrirNuevaCotizacion()">+ Nueva cotización</button>
       </div>
       <div class="card">
-        <p class="hint">Al confirmar una cotización se convierte en pedido sin recapturar datos.</p>
+        <p class="hint">Al convertir a pedido se copian los datos sin recapturar.</p>
         <table>
           <thead><tr><th>Folio</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Estatus</th><th></th></tr></thead>
-          <tbody><tr><td colspan="6" class="empty-state">Sin cotizaciones registradas</td></tr></tbody>
+          <tbody id="tabla-cotizaciones">
+            <tr><td colspan="6" class="empty-state">Cargando cotizaciones…</td></tr>
+          </tbody>
         </table>
       </div>
     </section>
+
+    <!-- ---------- MODAL COTIZACION ---------- -->
+    <div class="modal-overlay" id="modal-cotizacion">
+      <div class="modal wide">
+        <h3 id="modal-cotizacion-titulo">Nueva cotización</h3>
+        <input type="hidden" id="cotizacion-id">
+
+        <div class="field">
+          <label>Cliente *</label>
+          <select id="cotizacion-cliente">
+            <option value="">Selecciona un cliente…</option>
+          </select>
+        </div>
+
+        <div class="field" style="margin-top:18px;">
+          <label>Productos</label>
+          <div id="cotizacion-items"></div>
+          <button class="btn secondary" style="margin-top:6px;" onclick="window.agregarLineaCotizacion()">+ Agregar producto</button>
+        </div>
+
+        <div class="items-total">
+          <span>Total:</span>
+          <span id="cotizacion-total">$0</span>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn secondary" onclick="window.cerrarModalCotizacion()">Cancelar</button>
+          <button class="btn" id="btn-guardar-cotizacion" onclick="window.guardarCotizacion()">Guardar cotización</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ---------- PEDIDOS ---------- -->
     <section class="view" id="view-pedidos">
       <div id="topbar">
         <h2>Pedidos</h2>
-        <button class="btn" onclick="window.abrirNuevoPedido()">+ Nuevo pedido</button>
       </div>
       <div class="card">
-        <p class="hint">Flujo: confirmado → verificando inventario → surtiendo → entregado → facturado.</p>
+        <p class="hint">Flujo: confirmado → surtiendo → entregado → facturado. Los pedidos se generan al convertir una cotización.</p>
         <table>
-          <thead><tr><th>Folio</th><th>Cliente</th><th>Total</th><th>Anticipo</th><th>Saldo</th><th>Estatus</th></tr></thead>
-          <tbody>
-            <tr>
-              <td colspan="6" class="empty-state">Sin pedidos activos</td>
-            </tr>
+          <thead><tr><th>Folio</th><th>Cliente</th><th>Total</th><th>Anticipo</th><th>Saldo</th><th>Estatus</th><th></th></tr></thead>
+          <tbody id="tabla-pedidos">
+            <tr><td colspan="7" class="empty-state">Cargando pedidos…</td></tr>
           </tbody>
         </table>
       </div>
     </section>
+
+    <!-- ---------- MODAL ABONO ---------- -->
+    <div class="modal-overlay" id="modal-abono">
+      <div class="modal">
+        <h3>Registrar abono</h3>
+        <input type="hidden" id="abono-pedido-id">
+        <p class="hint" id="abono-info" style="margin-bottom:16px;"></p>
+        <div class="field">
+          <label>Monto del abono (MXN) *</label>
+          <input type="number" id="abono-monto" placeholder="0" min="1">
+        </div>
+        <div class="modal-actions">
+          <button class="btn secondary" onclick="window.cerrarModalAbono()">Cancelar</button>
+          <button class="btn" id="btn-guardar-abono" onclick="window.guardarAbono()">Registrar</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ---------- COMPRAS ---------- -->
     <section class="view" id="view-compras">
@@ -894,14 +975,362 @@ window.guardarProducto = async function(){
 cargarProductos();
 
 // ============================================================
+// COTIZACIONES — folio consecutivo, líneas de producto, total
+// ============================================================
+const cotizacionesCache = {};
+let lineaCotizacionContador = 0;
+
+async function siguienteFolio(nombreContador, prefijo){
+  const ref = db.collection('contadores').doc(nombreContador);
+  const nuevoNumero = await db.runTransaction(async t => {
+    const doc = await t.get(ref);
+    const actual = doc.exists ? (doc.data().ultimo || 0) : 0;
+    const siguiente = actual + 1;
+    t.set(ref, { ultimo: siguiente }, { merge: true });
+    return siguiente;
+  });
+  return prefijo + '-' + String(nuevoNumero).padStart(4, '0');
+}
+
+function opcionesClientesHTML(){
+  return Object.keys(clientesCache).map(id =>
+    `<option value="${id}">${clientesCache[id].nombre}</option>`
+  ).join('');
+}
+
+function opcionesProductosHTML(){
+  return Object.keys(productosCache).map(id => {
+    const p = productosCache[id];
+    return `<option value="${id}" data-precio="${p.precio_mayoreo || 0}">${p.nombre} (${p.talla || ''}/${p.color || ''})</option>`;
+  }).join('');
+}
+
+function filaLineaCotizacion(item){
+  lineaCotizacionContador++;
+  const rowId = 'linea-' + lineaCotizacionContador;
+  const productoId = item ? item.producto_id : '';
+  const cantidad = item ? item.cantidad : 1;
+  const precio = item ? item.precio_unitario : 0;
+
+  const div = document.createElement('div');
+  div.className = 'item-row';
+  div.id = rowId;
+  div.innerHTML = `
+    <div class="field">
+      <select onchange="window.actualizarPrecioLinea('${rowId}')">
+        <option value="">Selecciona producto…</option>
+        ${opcionesProductosHTML()}
+      </select>
+    </div>
+    <div class="field qty">
+      <input type="number" min="1" value="${cantidad}" onchange="window.recalcularTotalCotizacion()">
+    </div>
+    <div class="field price">
+      <input type="number" min="0" value="${precio}" onchange="window.recalcularTotalCotizacion()">
+    </div>
+    <div class="subtotal">$0</div>
+    <div class="remove-item" onclick="window.quitarLineaCotizacion('${rowId}')">×</div>
+  `;
+  document.getElementById('cotizacion-items').appendChild(div);
+
+  if (productoId){
+    div.querySelector('select').value = productoId;
+  }
+  window.recalcularTotalCotizacion();
+}
+
+window.agregarLineaCotizacion = function(){
+  filaLineaCotizacion(null);
+};
+
+window.quitarLineaCotizacion = function(rowId){
+  const el = document.getElementById(rowId);
+  if (el) el.remove();
+  window.recalcularTotalCotizacion();
+};
+
+window.actualizarPrecioLinea = function(rowId){
+  const row = document.getElementById(rowId);
+  const select = row.querySelector('select');
+  const precioInput = row.querySelector('.price input');
+  const opcion = select.options[select.selectedIndex];
+  precioInput.value = opcion ? (opcion.dataset.precio || 0) : 0;
+  window.recalcularTotalCotizacion();
+};
+
+window.recalcularTotalCotizacion = function(){
+  let total = 0;
+  document.querySelectorAll('#cotizacion-items .item-row').forEach(row => {
+    const cantidad = Number(row.querySelector('.qty input').value) || 0;
+    const precio = Number(row.querySelector('.price input').value) || 0;
+    const subtotal = cantidad * precio;
+    row.querySelector('.subtotal').textContent = formatoMoneda(subtotal);
+    total += subtotal;
+  });
+  document.getElementById('cotizacion-total').textContent = formatoMoneda(total);
+};
+
+function leerLineasCotizacion(){
+  const items = [];
+  document.querySelectorAll('#cotizacion-items .item-row').forEach(row => {
+    const select = row.querySelector('select');
+    const productoId = select.value;
+    if (!productoId) return;
+    const opcion = select.options[select.selectedIndex];
+    items.push({
+      producto_id: productoId,
+      producto_nombre: opcion.textContent,
+      cantidad: Number(row.querySelector('.qty input').value) || 0,
+      precio_unitario: Number(row.querySelector('.price input').value) || 0
+    });
+  });
+  return items;
+}
+
+function pintarTablaCotizaciones(){
+  const tbody = document.getElementById('tabla-cotizaciones');
+  const ids = Object.keys(cotizacionesCache);
+
+  if (ids.length === 0){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin cotizaciones registradas</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ids.map(id => {
+    const c = cotizacionesCache[id];
+    const fecha = c.creado && c.creado.toDate ? c.creado.toDate().toLocaleDateString('es-MX') : '—';
+    const badgeClase = c.estatus === 'convertida' ? 'entregado' : 'pendiente';
+    return `
+      <tr>
+        <td>${c.folio || '—'}</td>
+        <td>${c.cliente_nombre || '—'}</td>
+        <td>${fecha}</td>
+        <td>${formatoMoneda(c.total)}</td>
+        <td><span class="badge ${badgeClase}">${c.estatus === 'convertida' ? 'Convertida' : 'Pendiente'}</span></td>
+        <td class="row-actions">
+          ${c.estatus === 'convertida' ? '' : `<button class="link-btn" onclick="window.convertirCotizacionAPedido('${id}')">Convertir a pedido</button>`}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function cargarCotizaciones(){
+  db.collection('cotizaciones_mayoreo').orderBy('creado', 'desc').onSnapshot(snapshot => {
+    Object.keys(cotizacionesCache).forEach(k => delete cotizacionesCache[k]);
+    snapshot.forEach(doc => { cotizacionesCache[doc.id] = doc.data(); });
+    pintarTablaCotizaciones();
+  }, err => {
+    console.error('Error cargando cotizaciones:', err);
+    document.getElementById('tabla-cotizaciones').innerHTML =
+      '<tr><td colspan="6" class="empty-state">Error al cargar cotizaciones — revisa la consola</td></tr>';
+  });
+}
+
+window.abrirNuevaCotizacion = function(){
+  document.getElementById('cotizacion-id').value = '';
+  document.getElementById('cotizacion-cliente').innerHTML =
+    '<option value="">Selecciona un cliente…</option>' + opcionesClientesHTML();
+  document.getElementById('cotizacion-items').innerHTML = '';
+  document.getElementById('cotizacion-total').textContent = '$0';
+  filaLineaCotizacion(null);
+  document.getElementById('modal-cotizacion-titulo').textContent = 'Nueva cotización';
+  document.getElementById('modal-cotizacion').classList.add('open');
+};
+
+window.cerrarModalCotizacion = function(){
+  document.getElementById('modal-cotizacion').classList.remove('open');
+};
+
+window.guardarCotizacion = async function(){
+  const clienteId = document.getElementById('cotizacion-cliente').value;
+  if (!clienteId){
+    alert('Selecciona un cliente');
+    return;
+  }
+  const items = leerLineasCotizacion();
+  if (items.length === 0){
+    alert('Agrega al menos un producto');
+    return;
+  }
+
+  const btn = document.getElementById('btn-guardar-cotizacion');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+
+  try {
+    const total = items.reduce((sum, it) => sum + it.cantidad * it.precio_unitario, 0);
+    const folio = await siguienteFolio('cotizaciones', 'COT');
+
+    await db.collection('cotizaciones_mayoreo').add({
+      folio: folio,
+      cliente_id: clienteId,
+      cliente_nombre: clientesCache[clienteId].nombre,
+      items: items,
+      total: total,
+      estatus: 'pendiente',
+      creado: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    window.cerrarModalCotizacion();
+  } catch (err){
+    console.error('Error guardando cotización:', err);
+    alert('No se pudo guardar la cotización. Revisa la consola para más detalle.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar cotización';
+  }
+};
+
+window.convertirCotizacionAPedido = async function(cotizacionId){
+  const c = cotizacionesCache[cotizacionId];
+  if (!c) return;
+  if (!confirm(`¿Convertir ${c.folio} en pedido para ${c.cliente_nombre}?`)) return;
+
+  try {
+    const folioPedido = await siguienteFolio('pedidos', 'PED');
+    await db.collection('pedidos_mayoreo').add({
+      folio: folioPedido,
+      cotizacion_id: cotizacionId,
+      cliente_id: c.cliente_id,
+      cliente_nombre: c.cliente_nombre,
+      items: c.items,
+      total: c.total,
+      anticipo: 0,
+      saldo: c.total,
+      estatus: 'confirmado',
+      creado: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await db.collection('cotizaciones_mayoreo').doc(cotizacionId).update({ estatus: 'convertida' });
+    alert(`Pedido ${folioPedido} creado`);
+  } catch (err){
+    console.error('Error convirtiendo cotización:', err);
+    alert('No se pudo convertir la cotización. Revisa la consola.');
+  }
+};
+
+cargarCotizaciones();
+
+// ============================================================
+// PEDIDOS — listado real, registrar abono, avanzar estatus
+// ============================================================
+const pedidosCache = {};
+const secuenciaEstatus = ['confirmado', 'surtiendo', 'entregado', 'facturado'];
+const etiquetaEstatus = { confirmado: 'Confirmado', surtiendo: 'Surtiendo', entregado: 'Entregado', facturado: 'Facturado' };
+const badgeEstatus = { confirmado: 'pendiente', surtiendo: 'proceso', entregado: 'entregado', facturado: 'entregado' };
+
+function pintarTablaPedidos(){
+  const tbody = document.getElementById('tabla-pedidos');
+  const ids = Object.keys(pedidosCache);
+
+  if (ids.length === 0){
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Sin pedidos activos</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ids.map(id => {
+    const p = pedidosCache[id];
+    const siguienteIndex = secuenciaEstatus.indexOf(p.estatus) + 1;
+    const hayFiguiente = siguienteIndex < secuenciaEstatus.length;
+    const saldoPendiente = Number(p.saldo) > 0;
+
+    return `
+      <tr>
+        <td>${p.folio || '—'}</td>
+        <td>${p.cliente_nombre || '—'}</td>
+        <td>${formatoMoneda(p.total)}</td>
+        <td>${formatoMoneda(p.anticipo)}</td>
+        <td>${saldoPendiente ? `<span class="badge saldo">${formatoMoneda(p.saldo)}</span>` : formatoMoneda(p.saldo)}</td>
+        <td><span class="badge ${badgeEstatus[p.estatus] || 'pendiente'}">${etiquetaEstatus[p.estatus] || p.estatus}</span></td>
+        <td class="row-actions">
+          ${saldoPendiente ? `<button class="link-btn" onclick="window.abrirModalAbono('${id}')">Registrar abono</button>` : ''}
+          ${hayFiguiente ? `<button class="link-btn" onclick="window.avanzarEstatusPedido('${id}')">Avanzar</button>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function cargarPedidos(){
+  db.collection('pedidos_mayoreo').orderBy('creado', 'desc').onSnapshot(snapshot => {
+    Object.keys(pedidosCache).forEach(k => delete pedidosCache[k]);
+    snapshot.forEach(doc => { pedidosCache[doc.id] = doc.data(); });
+    pintarTablaPedidos();
+  }, err => {
+    console.error('Error cargando pedidos:', err);
+    document.getElementById('tabla-pedidos').innerHTML =
+      '<tr><td colspan="7" class="empty-state">Error al cargar pedidos — revisa la consola</td></tr>';
+  });
+}
+
+window.avanzarEstatusPedido = async function(pedidoId){
+  const p = pedidosCache[pedidoId];
+  if (!p) return;
+  const siguienteIndex = secuenciaEstatus.indexOf(p.estatus) + 1;
+  if (siguienteIndex >= secuenciaEstatus.length) return;
+  const nuevoEstatus = secuenciaEstatus[siguienteIndex];
+
+  try {
+    await db.collection('pedidos_mayoreo').doc(pedidoId).update({ estatus: nuevoEstatus });
+  } catch (err){
+    console.error('Error avanzando estatus:', err);
+    alert('No se pudo actualizar el estatus. Revisa la consola.');
+  }
+};
+
+window.abrirModalAbono = function(pedidoId){
+  const p = pedidosCache[pedidoId];
+  if (!p) return;
+  document.getElementById('abono-pedido-id').value = pedidoId;
+  document.getElementById('abono-info').textContent =
+    `${p.folio} · ${p.cliente_nombre} · Saldo actual: ${formatoMoneda(p.saldo)}`;
+  document.getElementById('abono-monto').value = '';
+  document.getElementById('modal-abono').classList.add('open');
+};
+
+window.cerrarModalAbono = function(){
+  document.getElementById('modal-abono').classList.remove('open');
+};
+
+window.guardarAbono = async function(){
+  const pedidoId = document.getElementById('abono-pedido-id').value;
+  const monto = Number(document.getElementById('abono-monto').value);
+  const p = pedidosCache[pedidoId];
+
+  if (!monto || monto <= 0){
+    alert('Ingresa un monto válido');
+    return;
+  }
+  if (!p) return;
+
+  const btn = document.getElementById('btn-guardar-abono');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+
+  try {
+    const nuevoAnticipo = (Number(p.anticipo) || 0) + monto;
+    const nuevoSaldo = Math.max((Number(p.total) || 0) - nuevoAnticipo, 0);
+
+    await db.collection('pedidos_mayoreo').doc(pedidoId).update({
+      anticipo: nuevoAnticipo,
+      saldo: nuevoSaldo
+    });
+
+    window.cerrarModalAbono();
+  } catch (err){
+    console.error('Error registrando abono:', err);
+    alert('No se pudo registrar el abono. Revisa la consola.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Registrar';
+  }
+};
+
+cargarPedidos();
+
+// ============================================================
 // PLACEHOLDERS — cada uno se conecta después a su colección
 // ============================================================
-window.abrirNuevaCotizacion = function(){
-  alert('Pendiente: formulario de nueva cotización');
-};
-window.abrirNuevoPedido = function(){
-  alert('Pendiente: formulario de nuevo pedido');
-};
 window.abrirNuevaOrdenCompra = function(){
   alert('Pendiente: formulario de nueva orden de compra');
 };
@@ -917,8 +1346,20 @@ document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString
 // CARGA INICIAL DE KPIs (placeholder — reemplazar con consultas reales)
 // ============================================================
 async function cargarKPIs(){
-  document.getElementById('kpi-pedidos-abiertos').textContent = '0';
-  document.getElementById('kpi-por-cobrar').textContent = '$0';
+  try {
+    const snap = await db.collection('pedidos_mayoreo').get();
+    let abiertos = 0, porCobrar = 0;
+    snap.forEach(doc => {
+      const p = doc.data();
+      if (p.estatus !== 'facturado') abiertos++;
+      porCobrar += Number(p.saldo) || 0;
+    });
+    document.getElementById('kpi-pedidos-abiertos').textContent = abiertos;
+    document.getElementById('kpi-por-cobrar').textContent = formatoMoneda(porCobrar);
+  } catch (err){
+    document.getElementById('kpi-pedidos-abiertos').textContent = '0';
+    document.getElementById('kpi-por-cobrar').textContent = '$0';
+  }
   document.getElementById('kpi-vencido').textContent = '$0';
   try {
     const snap = await db.collection('clientes').get();
