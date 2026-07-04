@@ -9,7 +9,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <style>
   :root{
@@ -497,12 +496,7 @@
           <label for="cliente-factura" style="margin:0;font-weight:400;">Requiere factura</label>
         </div>
 
-        <div class="field" id="campo-constancia">
-          <label>Constancia de situación fiscal (PDF)</label>
-          <input type="file" id="cliente-constancia-file" accept="application/pdf">
-          <div class="file-hint">Se sube solo si el cliente requiere factura</div>
-          <div class="file-current" id="cliente-constancia-actual"></div>
-        </div>
+        <p class="hint" style="margin:-6px 0 14px;">Constancia del SAT (PDF): pendiente — falta activar almacenamiento de archivos</p>
 
         <div class="modal-actions">
           <button class="btn secondary" onclick="window.cerrarModalCliente()">Cancelar</button>
@@ -832,17 +826,28 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-const storage = firebase.storage();
 const auth = firebase.auth();
 
 // ============================================================
 // AUTENTICACIÓN — solo usuarios creados en Firebase Auth
 // (Console → Authentication → Users) pueden entrar
 // ============================================================
+let datosInicializados = false;
+
 auth.onAuthStateChanged(function(user){
   if (user){
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
+
+    if (!datosInicializados){
+      datosInicializados = true;
+      cargarClientes();
+      cargarProductos();
+      cargarCotizaciones();
+      cargarPedidos();
+      cargarCompras();
+      cargarKPIs();
+    }
   } else {
     document.getElementById('login-screen').classList.remove('hidden');
     document.getElementById('app').classList.add('hidden');
@@ -959,8 +964,6 @@ function limpiarFormularioCliente(){
   document.getElementById('cliente-lista-precios').value = 'publico';
   document.getElementById('cliente-limite-credito').value = '';
   document.getElementById('cliente-factura').checked = false;
-  document.getElementById('cliente-constancia-file').value = '';
-  document.getElementById('cliente-constancia-actual').textContent = '';
 }
 
 window.abrirNuevoCliente = function(){
@@ -982,10 +985,6 @@ window.editarCliente = function(id){
   document.getElementById('cliente-lista-precios').value = c.lista_precios || 'publico';
   document.getElementById('cliente-limite-credito').value = c.limite_credito || '';
   document.getElementById('cliente-factura').checked = !!c.factura;
-  document.getElementById('cliente-constancia-file').value = '';
-  document.getElementById('cliente-constancia-actual').textContent = c.constancia_url
-    ? 'Ya tiene constancia subida — selecciona otro PDF solo si la quieres reemplazar'
-    : '';
 
   document.getElementById('modal-cliente-titulo').textContent = 'Editar cliente';
   document.getElementById('modal-cliente').classList.add('open');
@@ -1020,25 +1019,12 @@ window.guardarCliente = async function(){
       actualizado: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    const archivo = document.getElementById('cliente-constancia-file').files[0];
-    let docRef;
-
     if (id){
-      docRef = db.collection('clientes').doc(id);
-      await docRef.update(datos);
+      await db.collection('clientes').doc(id).update(datos);
     } else {
       datos.saldo_actual = 0;
       datos.creado = firebase.firestore.FieldValue.serverTimestamp();
-      docRef = await db.collection('clientes').add(datos);
-    }
-
-    // Subir constancia SAT si se seleccionó un archivo
-    if (archivo){
-      const ruta = `clientes/${docRef.id}/constancia_sat.pdf`;
-      const ref = storage.ref(ruta);
-      await ref.put(archivo);
-      const url = await ref.getDownloadURL();
-      await docRef.update({ constancia_url: url });
+      await db.collection('clientes').add(datos);
     }
 
     window.cerrarModalCliente();
@@ -1051,7 +1037,7 @@ window.guardarCliente = async function(){
   }
 };
 
-cargarClientes();
+// (cargarClientes se dispara desde onAuthStateChanged, después del login)
 
 // ============================================================
 // CATALOGO / INVENTARIO — CRUD contra la colección "productos_mayoreo"
@@ -1199,7 +1185,7 @@ window.guardarProducto = async function(){
   }
 };
 
-cargarProductos();
+// (cargarProductos se dispara desde onAuthStateChanged, después del login)
 
 // ============================================================
 // COTIZACIONES — folio consecutivo, líneas de producto, total
@@ -1448,7 +1434,7 @@ window.convertirCotizacionAPedido = async function(cotizacionId){
   }
 };
 
-cargarCotizaciones();
+// (cargarCotizaciones se dispara desde onAuthStateChanged, después del login)
 
 // ============================================================
 // PEDIDOS — listado real, registrar abono, avanzar estatus
@@ -1739,7 +1725,7 @@ window.guardarAbono = async function(){
   }
 };
 
-cargarPedidos();
+// (cargarPedidos se dispara desde onAuthStateChanged, después del login)
 
 // ============================================================
 // COMPRAS A PROVEEDOR — folio OC, líneas de producto, recepción
@@ -1923,7 +1909,7 @@ window.marcarCompraRecibida = async function(compraId){
   }
 };
 
-cargarCompras();
+// (cargarCompras se dispara desde onAuthStateChanged, después del login)
 
 // ============================================================
 // FECHA EN TOPBAR
@@ -1957,7 +1943,7 @@ async function cargarKPIs(){
     document.getElementById('kpi-clientes-activos').textContent = '0';
   }
 }
-cargarKPIs();
+// (cargarKPIs se dispara desde onAuthStateChanged, después del login)
 </script>
 
 </body>
