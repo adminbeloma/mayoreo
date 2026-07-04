@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mayoreo — Playeras Beloma</title>
+
+<!-- Firebase (mismo proyecto que adminbeloma) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+<style>
+  :root{
+    --bg:#f4f5f7;
+    --panel:#ffffff;
+    --border:#e2e4e9;
+    --text:#1c1f26;
+    --text-muted:#6b7280;
+    --accent:#1d4ed8;
+    --accent-soft:#e8edfc;
+    --green:#0f9d58;
+    --amber:#b45309;
+    --red:#c0362c;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+
+  /* ---------- layout ---------- */
+  #app{display:flex;min-height:100vh;}
+
+  #sidebar{
+    width:220px;
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    padding:20px 12px;
+    flex-shrink:0;
+  }
+  #sidebar h1{
+    font-size:15px;
+    font-weight:600;
+    margin:0 8px 4px;
+  }
+  #sidebar .subtitle{
+    font-size:12px;
+    color:var(--text-muted);
+    margin:0 8px 20px;
+  }
+  .nav-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:9px 10px;
+    border-radius:8px;
+    font-size:14px;
+    color:var(--text);
+    cursor:pointer;
+    margin-bottom:2px;
+  }
+  .nav-item:hover{background:var(--bg);}
+  .nav-item.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+  .nav-item .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--text-muted);flex-shrink:0;
+  }
+  .nav-item.active .dot{background:var(--accent);}
+
+  #main{flex:1;padding:24px 32px;overflow-x:hidden;}
+
+  #topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:20px;
+  }
+  #topbar h2{font-size:20px;margin:0;}
+  #topbar .meta{font-size:13px;color:var(--text-muted);}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:18px 20px;
+    margin-bottom:16px;
+  }
+  .card h3{margin:0 0 4px;font-size:15px;}
+  .card p.hint{margin:0 0 14px;font-size:13px;color:var(--text-muted);}
+
+  .kpi-row{display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap;}
+  .kpi{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:14px 18px;
+    min-width:150px;
+    flex:1;
+  }
+  .kpi .label{font-size:12px;color:var(--text-muted);margin-bottom:6px;}
+  .kpi .value{font-size:22px;font-weight:600;}
+  .kpi .value.green{color:var(--green);}
+  .kpi .value.amber{color:var(--amber);}
+  .kpi .value.red{color:var(--red);}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{
+    text-align:left;
+    font-weight:600;
+    color:var(--text-muted);
+    border-bottom:1px solid var(--border);
+    padding:8px 10px;
+  }
+  td{padding:10px;border-bottom:1px solid var(--border);}
+  tr:last-child td{border-bottom:none;}
+
+  .badge{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:20px;
+    font-size:11px;
+    font-weight:600;
+  }
+  .badge.pendiente{background:#fef3c7;color:var(--amber);}
+  .badge.proceso{background:var(--accent-soft);color:var(--accent);}
+  .badge.entregado{background:#dcfce7;color:var(--green);}
+  .badge.saldo{background:#fee2e2;color:var(--red);}
+
+  button.btn{
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:8px 14px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  button.btn:hover{opacity:0.9;}
+  button.btn.secondary{
+    background:var(--panel);
+    color:var(--text);
+    border:1px solid var(--border);
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:40px 20px;
+    color:var(--text-muted);
+    font-size:13px;
+  }
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  @media (max-width:800px){
+    #sidebar{position:fixed;z-index:10;height:100vh;transform:translateX(-100%);transition:transform .2s;}
+    #sidebar.open{transform:translateX(0);}
+    #main{padding:16px;}
+    .kpi-row{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <nav id="sidebar">
+    <h1>Mayoreo</h1>
+    <p class="subtitle">Playeras Beloma · Distribuidora</p>
+
+    <div class="nav-item active" data-view="dashboard" onclick="window.mostrarVista('dashboard')">
+      <span class="dot"></span> Panel general
+    </div>
+    <div class="nav-item" data-view="clientes" onclick="window.mostrarVista('clientes')">
+      <span class="dot"></span> Clientes
+    </div>
+    <div class="nav-item" data-view="catalogo" onclick="window.mostrarVista('catalogo')">
+      <span class="dot"></span> Catálogo/Inventario
+    </div>
+    <div class="nav-item" data-view="cotizaciones" onclick="window.mostrarVista('cotizaciones')">
+      <span class="dot"></span> Cotizaciones
+    </div>
+    <div class="nav-item" data-view="pedidos" onclick="window.mostrarVista('pedidos')">
+      <span class="dot"></span> Pedidos
+    </div>
+    <div class="nav-item" data-view="compras" onclick="window.mostrarVista('compras')">
+      <span class="dot"></span> Compras a proveedor
+    </div>
+    <div class="nav-item" data-view="cobranza" onclick="window.mostrarVista('cobranza')">
+      <span class="dot"></span> Cobranza
+    </div>
+    <div class="nav-item" data-view="reportes" onclick="window.mostrarVista('reportes')">
+      <span class="dot"></span> Reportes
+    </div>
+  </nav>
+
+  <!-- ============ MAIN ============ -->
+  <main id="main">
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <section class="view active" id="view-dashboard">
+      <div id="topbar">
+        <h2>Panel general</h2>
+        <span class="meta" id="fecha-hoy"></span>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Pedidos abiertos</div><div class="value" id="kpi-pedidos-abiertos">—</div></div>
+        <div class="kpi"><div class="label">Por cobrar total</div><div class="value amber" id="kpi-por-cobrar">—</div></div>
+        <div class="kpi"><div class="label">Vencido (+30 días)</div><div class="value red" id="kpi-vencido">—</div></div>
+        <div class="kpi"><div class="label">Clientes activos</div><div class="value" id="kpi-clientes-activos">—</div></div>
+      </div>
+
+      <div class="card">
+        <h3>Pedidos recientes</h3>
+        <p class="hint">Últimos movimientos en el módulo de mayoreo</p>
+        <table>
+          <thead><tr><th>Folio</th><th>Cliente</th><th>Total</th><th>Saldo</th><th>Estatus</th></tr></thead>
+          <tbody id="tabla-pedidos-recientes">
+            <tr><td colspan="5" class="empty-state">Aún no hay pedidos registrados</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- CLIENTES ---------- -->
+    <section class="view" id="view-clientes">
+      <div id="topbar">
+        <h2>Clientes mayoristas</h2>
+        <button class="btn" onclick="window.abrirNuevoCliente()">+ Nuevo cliente</button>
+      </div>
+      <div class="card">
+        <p class="hint">Comparte la misma colección de clientes que el admin principal. Aquí se agrega tipo (mayorista/medio mayoreo/menudeo), lista de precios y límite de crédito.</p>
+        <table>
+          <thead><tr><th>Nombre</th><th>Tipo</th><th>Lista de precios</th><th>Límite crédito</th><th>Saldo actual</th></tr></thead>
+          <tbody><tr><td colspan="5" class="empty-state">Conectar a colección "clientes" de Firestore</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- CATALOGO / INVENTARIO ---------- -->
+    <section class="view" id="view-catalogo">
+      <div id="topbar">
+        <h2>Catálogo e inventario</h2>
+        <button class="btn" onclick="window.abrirNuevoProducto()">+ Nuevo producto</button>
+      </div>
+      <div class="card">
+        <p class="hint">SKU por combinación de tipo/talla/color. Stock por bodega, alertas de reorden.</p>
+        <table>
+          <thead><tr><th>SKU</th><th>Producto</th><th>Talla/Color</th><th>Stock</th><th>Mínimo</th><th>Precio mayoreo</th></tr></thead>
+          <tbody><tr><td colspan="6" class="empty-state">Sin productos cargados todavía</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- COTIZACIONES ---------- -->
+    <section class="view" id="view-cotizaciones">
+      <div id="topbar">
+        <h2>Cotizaciones</h2>
+        <button class="btn" onclick="window.abrirNuevaCotizacion()">+ Nueva cotización</button>
+      </div>
+      <div class="card">
+        <p class="hint">Al confirmar una cotización se convierte en pedido sin recapturar datos.</p>
+        <table>
+          <thead><tr><th>Folio</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Estatus</th><th></th></tr></thead>
+          <tbody><tr><td colspan="6" class="empty-state">Sin cotizaciones registradas</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- PEDIDOS ---------- -->
+    <section class="view" id="view-pedidos">
+      <div id="topbar">
+        <h2>Pedidos</h2>
+        <button class="btn" onclick="window.abrirNuevoPedido()">+ Nuevo pedido</button>
+      </div>
+      <div class="card">
+        <p class="hint">Flujo: confirmado → verificando inventario → surtiendo → entregado → facturado.</p>
+        <table>
+          <thead><tr><th>Folio</th><th>Cliente</th><th>Total</th><th>Anticipo</th><th>Saldo</th><th>Estatus</th></tr></thead>
+          <tbody>
+            <tr>
+              <td colspan="6" class="empty-state">Sin pedidos activos</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- COMPRAS ---------- -->
+    <section class="view" id="view-compras">
+      <div id="topbar">
+        <h2>Compras a proveedor</h2>
+        <button class="btn" onclick="window.abrirNuevaOrdenCompra()">+ Nueva orden de compra</button>
+      </div>
+      <div class="card">
+        <p class="hint">Al recibir mercancía se actualiza el inventario automáticamente.</p>
+        <table>
+          <thead><tr><th>Folio OC</th><th>Proveedor</th><th>Fecha</th><th>Total</th><th>Estatus</th></tr></thead>
+          <tbody><tr><td colspan="5" class="empty-state">Sin órdenes de compra</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- COBRANZA ---------- -->
+    <section class="view" id="view-cobranza">
+      <div id="topbar">
+        <h2>Cobranza</h2>
+      </div>
+      <div class="card">
+        <h3>Antigüedad de saldos</h3>
+        <p class="hint">Clientes con saldo pendiente, agrupados por días de vencimiento.</p>
+        <table>
+          <thead><tr><th>Cliente</th><th>0-15 días</th><th>16-30 días</th><th>31-60 días</th><th>+60 días</th><th>Total</th></tr></thead>
+          <tbody><tr><td colspan="6" class="empty-state">Sin saldos pendientes</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- REPORTES ---------- -->
+    <section class="view" id="view-reportes">
+      <div id="topbar">
+        <h2>Reportes</h2>
+      </div>
+      <div class="card">
+        <h3>Rotación de inventario · rentabilidad por cliente · top productos</h3>
+        <p class="hint">Se construye una vez que haya movimientos de pedidos y compras registrados.</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN FIREBASE — pega aquí el mismo config que usa
+// adminbeloma.github.io para compartir la colección de clientes
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAvhG8RuytIv9rjsILWF8twyZeqTwfJ10I",
+  authDomain: "adminbeloma.firebaseapp.com",
+  projectId: "adminbeloma",
+  storageBucket: "adminbeloma.firebasestorage.app",
+  messagingSenderId: "542305826307",
+  appId: "1:542305826307:web:4d97b65719bf534eff0036"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ============================================================
+// NAVEGACIÓN
+// ============================================================
+window.mostrarVista = function(viewName){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  document.getElementById('view-' + viewName).classList.add('active');
+  document.querySelector('.nav-item[data-view="' + viewName + '"]').classList.add('active');
+};
+
+// ============================================================
+// PLACEHOLDERS — cada uno se conecta después a su colección
+// ============================================================
+window.abrirNuevoCliente = function(){
+  alert('Pendiente: formulario de nuevo cliente mayorista');
+};
+window.abrirNuevoProducto = function(){
+  alert('Pendiente: formulario de nuevo producto/SKU');
+};
+window.abrirNuevaCotizacion = function(){
+  alert('Pendiente: formulario de nueva cotización');
+};
+window.abrirNuevoPedido = function(){
+  alert('Pendiente: formulario de nuevo pedido');
+};
+window.abrirNuevaOrdenCompra = function(){
+  alert('Pendiente: formulario de nueva orden de compra');
+};
+
+// ============================================================
+// FECHA EN TOPBAR
+// ============================================================
+document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-MX', {
+  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+});
+
+// ============================================================
+// CARGA INICIAL DE KPIs (placeholder — reemplazar con consultas reales)
+// ============================================================
+async function cargarKPIs(){
+  document.getElementById('kpi-pedidos-abiertos').textContent = '0';
+  document.getElementById('kpi-por-cobrar').textContent = '$0';
+  document.getElementById('kpi-vencido').textContent = '$0';
+  document.getElementById('kpi-clientes-activos').textContent = '0';
+}
+cargarKPIs();
+</script>
+
+</body>
+</html>
