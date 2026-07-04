@@ -370,11 +370,20 @@
     <div class="nav-item active" data-view="dashboard" onclick="window.mostrarVista('dashboard')">
       <span class="dot"></span> Panel general
     </div>
+    <div class="nav-item" data-view="venta-directa" onclick="window.mostrarVista('venta-directa')">
+      <span class="dot"></span> Venta directa
+    </div>
+    <div class="nav-item" data-view="corte-caja" onclick="window.mostrarVista('corte-caja')">
+      <span class="dot"></span> Corte de caja
+    </div>
     <div class="nav-item" data-view="clientes" onclick="window.mostrarVista('clientes')">
       <span class="dot"></span> Clientes
     </div>
     <div class="nav-item" data-view="catalogo" onclick="window.mostrarVista('catalogo')">
       <span class="dot"></span> Catálogo/Inventario
+    </div>
+    <div class="nav-item" data-view="venta-directa" onclick="window.mostrarVista('venta-directa')">
+      <span class="dot"></span> Venta directa
     </div>
     <div class="nav-item" data-view="cotizaciones" onclick="window.mostrarVista('cotizaciones')">
       <span class="dot"></span> Cotizaciones
@@ -387,6 +396,9 @@
     </div>
     <div class="nav-item" data-view="cobranza" onclick="window.mostrarVista('cobranza')">
       <span class="dot"></span> Cobranza
+    </div>
+    <div class="nav-item" data-view="corte-caja" onclick="window.mostrarVista('corte-caja')">
+      <span class="dot"></span> Corte de caja
     </div>
     <div class="nav-item" data-view="reportes" onclick="window.mostrarVista('reportes')">
       <span class="dot"></span> Reportes
@@ -605,6 +617,79 @@
       </div>
     </div>
 
+    <!-- ---------- VENTA DIRECTA (MOSTRADOR) ---------- -->
+    <section class="view" id="view-venta-directa">
+      <div id="topbar">
+        <h2>Venta directa (mostrador)</h2>
+      </div>
+
+      <div class="card">
+        <div class="field-row" style="align-items:flex-end;">
+          <div class="field" style="flex:2;">
+            <label>Código (SKU) del producto</label>
+            <input type="text" id="venta-sku-input" placeholder="Escribe o escanea el SKU y presiona Enter"
+              onkeydown="if(event.key==='Enter'){ event.preventDefault(); window.buscarProductoPorSKU(); }">
+          </div>
+          <div class="field" style="flex:0 0 90px;">
+            <label>Cantidad</label>
+            <input type="number" id="venta-sku-cantidad" min="1" value="1">
+          </div>
+          <div class="field" style="flex:0 0 140px;">
+            <button class="btn" style="width:100%;" onclick="window.buscarProductoPorSKU()">Agregar</button>
+          </div>
+        </div>
+        <p class="hint" id="venta-sku-resultado">Escanea o escribe el código del producto</p>
+      </div>
+
+      <div class="card">
+        <h3>Carrito</h3>
+        <table>
+          <thead><tr><th>SKU</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead>
+          <tbody id="tabla-carrito-venta">
+            <tr><td colspan="6" class="empty-state">Carrito vacío — agrega un producto por código</td></tr>
+          </tbody>
+        </table>
+        <div class="items-total">
+          <span>Total:</span>
+          <span id="venta-directa-total">$0</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Cobro</h3>
+        <div class="field-row">
+          <div class="field">
+            <label>Forma de pago</label>
+            <select id="venta-forma-pago" onchange="window.actualizarCampoEfectivo()">
+              <option value="efectivo">Efectivo</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="transferencia">Transferencia</option>
+            </select>
+          </div>
+          <div class="field" id="venta-campo-efectivo">
+            <label>Efectivo recibido</label>
+            <input type="number" id="venta-efectivo-recibido" min="0" onchange="window.calcularCambioVenta()" onkeyup="window.calcularCambioVenta()">
+          </div>
+          <div class="field">
+            <label>Cambio</label>
+            <input type="text" id="venta-cambio" value="$0" disabled>
+          </div>
+        </div>
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:4px;">
+          <button class="btn" id="btn-cobrar-venta" onclick="window.cobrarVentaDirecta()">Cobrar venta</button>
+          <button class="btn secondary" onclick="window.vaciarCarritoVenta()">Vaciar carrito</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Ventas de hoy</h3>
+        <table>
+          <thead><tr><th>Folio</th><th>Hora</th><th>Total</th><th>Forma de pago</th></tr></thead>
+          <tbody id="tabla-ventas-hoy"><tr><td colspan="4" class="empty-state">Sin ventas registradas hoy</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ---------- COTIZACIONES ---------- -->
     <section class="view" id="view-cotizaciones">
       <div id="topbar">
@@ -746,6 +831,57 @@
       </div>
     </section>
 
+    <!-- ---------- CORTE DE CAJA ---------- -->
+    <section class="view" id="view-corte-caja">
+      <div id="topbar">
+        <h2>Corte de caja</h2>
+      </div>
+
+      <div class="card">
+        <div class="field-row">
+          <div class="field">
+            <label>Fecha</label>
+            <input type="date" id="corte-fecha" onchange="window.calcularCorteCaja()">
+          </div>
+          <div class="field">
+            <label>Fondo inicial (con el que abrió caja)</label>
+            <input type="number" id="corte-fondo-inicial" min="0" value="0" onchange="window.calcularCorteCaja()" onkeyup="window.calcularCorteCaja()">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Resumen del día</h3>
+        <table>
+          <tbody>
+            <tr><td>Ventas en efectivo</td><td style="text-align:right;" id="corte-ventas-efectivo">$0</td></tr>
+            <tr><td>Ventas con tarjeta</td><td style="text-align:right;" id="corte-ventas-tarjeta">$0</td></tr>
+            <tr><td>Ventas por transferencia</td><td style="text-align:right;" id="corte-ventas-transferencia">$0</td></tr>
+            <tr><td><strong>Total del día</strong></td><td style="text-align:right;"><strong id="corte-ventas-total">$0</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Arqueo</h3>
+        <div class="field-row">
+          <div class="field">
+            <label>Efectivo esperado en caja</label>
+            <input type="text" id="corte-efectivo-esperado" disabled>
+          </div>
+          <div class="field">
+            <label>Efectivo real (contado)</label>
+            <input type="number" id="corte-efectivo-real" min="0" onchange="window.calcularCorteCaja()" onkeyup="window.calcularCorteCaja()">
+          </div>
+          <div class="field">
+            <label>Diferencia</label>
+            <input type="text" id="corte-diferencia" disabled>
+          </div>
+        </div>
+        <button class="btn" onclick="window.guardarCorteCaja()">Guardar corte</button>
+      </div>
+    </section>
+
     <!-- ---------- REPORTES ---------- -->
     <section class="view" id="view-reportes">
       <div id="topbar">
@@ -776,7 +912,53 @@
             <input type="date" id="reporte-fecha-hasta" onchange="window.actualizarReporte()">
           </div>
         </div>
-        <p class="hint" id="reporte-resumen" style="margin-top:8px;">Cargando…</p>
+
+        <div class="field-row" style="align-items:flex-end;flex-wrap:wrap;margin-top:14px;">
+          <div class="field" style="min-width:170px;">
+            <label>Tipo de prenda</label>
+            <select id="reporte-filtro-tipo-prenda" onchange="window.actualizarReporte()">
+              <option value="todos">Todos</option>
+              <option value="cuello_redondo">Cuello redondo</option>
+              <option value="polo">Polo</option>
+              <option value="tank_top">Tank top / sin mangas</option>
+              <option value="sudadera">Sudadera</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="field" style="min-width:170px;">
+            <label>Material</label>
+            <select id="reporte-filtro-material" onchange="window.actualizarReporte()">
+              <option value="todos">Todos</option>
+            </select>
+          </div>
+          <div class="field" style="min-width:150px;">
+            <label>Género</label>
+            <select id="reporte-filtro-genero" onchange="window.actualizarReporte()">
+              <option value="todos">Todos</option>
+              <option value="hombre">Hombre</option>
+              <option value="mujer">Mujer</option>
+              <option value="nino">Niño</option>
+              <option value="unisex">Unisex</option>
+            </select>
+          </div>
+          <div class="field" style="min-width:150px;">
+            <label>Color</label>
+            <select id="reporte-filtro-color" onchange="window.actualizarReporte()">
+              <option value="todos">Todos</option>
+            </select>
+          </div>
+          <div class="field" style="min-width:130px;">
+            <label>Talla</label>
+            <select id="reporte-filtro-talla" onchange="window.actualizarReporte()">
+              <option value="todos">Todos</option>
+            </select>
+          </div>
+          <div class="field" style="min-width:110px;">
+            <button class="btn secondary" onclick="window.limpiarFiltrosReporte()">Limpiar filtros</button>
+          </div>
+        </div>
+
+        <p class="hint" id="reporte-resumen" style="margin-top:12px;">Cargando…</p>
       </div>
 
       <div class="card">
@@ -843,6 +1025,7 @@ auth.onAuthStateChanged(function(user){
       datosInicializados = true;
       cargarClientes();
       cargarProductos();
+      cargarVentasMostrador();
       cargarCotizaciones();
       cargarPedidos();
       cargarCompras();
@@ -1058,6 +1241,8 @@ function pintarTablaProductos(){
   const tbody = document.getElementById('tabla-productos');
   const ids = Object.keys(productosCache);
 
+  poblarFiltrosReporte();
+
   if (ids.length === 0){
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Sin productos cargados todavía</td></tr>';
     return;
@@ -1186,6 +1371,290 @@ window.guardarProducto = async function(){
 };
 
 // (cargarProductos se dispara desde onAuthStateChanged, después del login)
+
+// ============================================================
+// VENTA DIRECTA (MOSTRADOR) — buscar por SKU, carrito, cobro
+// ============================================================
+let carritoVenta = [];
+const ventasMostradorCache = {};
+
+function etiquetaFormaPago(fp){
+  const mapa = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia' };
+  return mapa[fp] || fp;
+}
+
+function esMismaFechaLocal(fechaA, fechaB){
+  return fechaA.getFullYear() === fechaB.getFullYear() &&
+    fechaA.getMonth() === fechaB.getMonth() &&
+    fechaA.getDate() === fechaB.getDate();
+}
+
+window.buscarProductoPorSKU = function(){
+  const skuInput = document.getElementById('venta-sku-input');
+  const sku = skuInput.value.trim().toUpperCase();
+  const cantidad = Number(document.getElementById('venta-sku-cantidad').value) || 1;
+  const resultado = document.getElementById('venta-sku-resultado');
+
+  if (!sku){
+    resultado.textContent = 'Escribe un código';
+    resultado.style.color = 'var(--red)';
+    return;
+  }
+
+  const encontrado = Object.entries(productosCache).find(([id, p]) => (p.sku || '').toUpperCase() === sku);
+
+  if (!encontrado){
+    resultado.textContent = `No se encontró ningún producto con el código "${sku}"`;
+    resultado.style.color = 'var(--red)';
+    return;
+  }
+
+  const [productoId, p] = encontrado;
+  const existente = carritoVenta.find(it => it.producto_id === productoId);
+
+  if (existente){
+    existente.cantidad += cantidad;
+  } else {
+    carritoVenta.push({
+      producto_id: productoId,
+      sku: p.sku,
+      nombre: p.nombre,
+      tipo_prenda: p.tipo_prenda,
+      genero: p.genero,
+      color: p.color,
+      talla: p.talla,
+      material: p.material,
+      cantidad: cantidad,
+      precio_unitario: Number(p.precio_mayoreo) || 0
+    });
+  }
+
+  resultado.style.color = 'var(--green)';
+  resultado.textContent = `Agregado: ${p.nombre} (${p.talla || ''}/${p.color || ''}) · ${formatoMoneda(p.precio_mayoreo)}`;
+  skuInput.value = '';
+  document.getElementById('venta-sku-cantidad').value = '1';
+  skuInput.focus();
+
+  pintarCarritoVenta();
+};
+
+function pintarCarritoVenta(){
+  const tbody = document.getElementById('tabla-carrito-venta');
+
+  if (carritoVenta.length === 0){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carrito vacío — agrega un producto por código</td></tr>';
+  } else {
+    tbody.innerHTML = carritoVenta.map((it, idx) => `
+      <tr>
+        <td>${it.sku || '—'}</td>
+        <td>${it.nombre}</td>
+        <td>${it.cantidad}</td>
+        <td>${formatoMoneda(it.precio_unitario)}</td>
+        <td>${formatoMoneda(it.cantidad * it.precio_unitario)}</td>
+        <td class="row-actions"><button class="link-btn" onclick="window.quitarDeCarritoVenta(${idx})">Quitar</button></td>
+      </tr>
+    `).join('');
+  }
+
+  const total = carritoVenta.reduce((sum, it) => sum + it.cantidad * it.precio_unitario, 0);
+  document.getElementById('venta-directa-total').textContent = formatoMoneda(total);
+  window.calcularCambioVenta();
+}
+
+window.quitarDeCarritoVenta = function(idx){
+  carritoVenta.splice(idx, 1);
+  pintarCarritoVenta();
+};
+
+window.vaciarCarritoVenta = function(){
+  carritoVenta = [];
+  document.getElementById('venta-sku-resultado').textContent = 'Escanea o escribe el código del producto';
+  document.getElementById('venta-sku-resultado').style.color = 'var(--text-muted)';
+  pintarCarritoVenta();
+};
+
+window.actualizarCampoEfectivo = function(){
+  const esEfectivo = document.getElementById('venta-forma-pago').value === 'efectivo';
+  document.getElementById('venta-campo-efectivo').style.display = esEfectivo ? 'block' : 'none';
+  window.calcularCambioVenta();
+};
+
+window.calcularCambioVenta = function(){
+  const total = carritoVenta.reduce((sum, it) => sum + it.cantidad * it.precio_unitario, 0);
+  const formaPago = document.getElementById('venta-forma-pago').value;
+  const cambioEl = document.getElementById('venta-cambio');
+
+  if (formaPago !== 'efectivo'){
+    cambioEl.value = '—';
+    return;
+  }
+  const recibido = Number(document.getElementById('venta-efectivo-recibido').value) || 0;
+  cambioEl.value = formatoMoneda(recibido - total);
+};
+
+window.cobrarVentaDirecta = async function(){
+  if (carritoVenta.length === 0){
+    alert('Agrega al menos un producto al carrito');
+    return;
+  }
+
+  const formaPago = document.getElementById('venta-forma-pago').value;
+  const total = carritoVenta.reduce((sum, it) => sum + it.cantidad * it.precio_unitario, 0);
+
+  let efectivoRecibido = null, cambio = null;
+  if (formaPago === 'efectivo'){
+    efectivoRecibido = Number(document.getElementById('venta-efectivo-recibido').value) || 0;
+    if (efectivoRecibido < total){
+      alert('El efectivo recibido es menor al total de la venta');
+      return;
+    }
+    cambio = efectivoRecibido - total;
+  }
+
+  const btn = document.getElementById('btn-cobrar-venta');
+  btn.disabled = true;
+  btn.textContent = 'Cobrando…';
+
+  try {
+    const folio = await siguienteFolio('ventas_mostrador', 'VTA');
+
+    const itemsVenta = carritoVenta.map(it => ({
+      producto_id: it.producto_id,
+      sku: it.sku,
+      producto_nombre: it.nombre,
+      tipo_prenda: it.tipo_prenda,
+      genero: it.genero,
+      color: it.color,
+      talla: it.talla,
+      material: it.material,
+      cantidad: it.cantidad,
+      precio_unitario: it.precio_unitario
+    }));
+
+    const batch = db.batch();
+    const ventaRef = db.collection('ventas_mostrador').doc();
+
+    batch.set(ventaRef, {
+      folio: folio,
+      items: itemsVenta,
+      total: total,
+      forma_pago: formaPago,
+      efectivo_recibido: efectivoRecibido,
+      cambio: cambio,
+      vendedor: auth.currentUser ? auth.currentUser.email : '',
+      creado: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    carritoVenta.forEach(it => {
+      const ref = db.collection('productos_mayoreo').doc(it.producto_id);
+      batch.update(ref, { stock: firebase.firestore.FieldValue.increment(-it.cantidad) });
+    });
+
+    await batch.commit();
+
+    alert(`Venta ${folio} registrada por ${formatoMoneda(total)}`);
+    carritoVenta = [];
+    document.getElementById('venta-efectivo-recibido').value = '';
+    pintarCarritoVenta();
+  } catch (err){
+    console.error('Error cobrando venta:', err);
+    alert('No se pudo registrar la venta. Revisa la consola.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Cobrar venta';
+  }
+};
+
+function pintarTablaVentasHoy(){
+  const tbody = document.getElementById('tabla-ventas-hoy');
+  const hoy = new Date();
+  const ventasHoy = Object.values(ventasMostradorCache).filter(v =>
+    v.creado && v.creado.toDate && esMismaFechaLocal(v.creado.toDate(), hoy)
+  );
+
+  if (ventasHoy.length === 0){
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Sin ventas registradas hoy</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ventasHoy.map(v => {
+    const hora = v.creado.toDate().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    return `<tr><td>${v.folio}</td><td>${hora}</td><td>${formatoMoneda(v.total)}</td><td>${etiquetaFormaPago(v.forma_pago)}</td></tr>`;
+  }).join('');
+}
+
+function cargarVentasMostrador(){
+  db.collection('ventas_mostrador').orderBy('creado', 'desc').onSnapshot(snapshot => {
+    Object.keys(ventasMostradorCache).forEach(k => delete ventasMostradorCache[k]);
+    snapshot.forEach(doc => { ventasMostradorCache[doc.id] = doc.data(); });
+    pintarTablaVentasHoy();
+    window.calcularCorteCaja();
+  }, err => {
+    console.error('Error cargando ventas de mostrador:', err);
+  });
+}
+
+// ============================================================
+// CORTE DE CAJA — resumen del día por forma de pago + arqueo
+// ============================================================
+window.calcularCorteCaja = function(){
+  const fechaInput = document.getElementById('corte-fecha').value;
+  if (!fechaInput) return;
+
+  const [y, m, d] = fechaInput.split('-').map(Number);
+  const fechaSeleccionada = new Date(y, m - 1, d);
+
+  const ventasDelDia = Object.values(ventasMostradorCache).filter(v =>
+    v.creado && v.creado.toDate && esMismaFechaLocal(v.creado.toDate(), fechaSeleccionada)
+  );
+
+  let efectivo = 0, tarjeta = 0, transferencia = 0;
+  ventasDelDia.forEach(v => {
+    const total = Number(v.total) || 0;
+    if (v.forma_pago === 'efectivo') efectivo += total;
+    else if (v.forma_pago === 'tarjeta') tarjeta += total;
+    else if (v.forma_pago === 'transferencia') transferencia += total;
+  });
+
+  document.getElementById('corte-ventas-efectivo').textContent = formatoMoneda(efectivo);
+  document.getElementById('corte-ventas-tarjeta').textContent = formatoMoneda(tarjeta);
+  document.getElementById('corte-ventas-transferencia').textContent = formatoMoneda(transferencia);
+  document.getElementById('corte-ventas-total').textContent = formatoMoneda(efectivo + tarjeta + transferencia);
+
+  const fondoInicial = Number(document.getElementById('corte-fondo-inicial').value) || 0;
+  const efectivoEsperado = fondoInicial + efectivo;
+  document.getElementById('corte-efectivo-esperado').value = formatoMoneda(efectivoEsperado);
+
+  const efectivoReal = Number(document.getElementById('corte-efectivo-real').value) || 0;
+  const diferencia = efectivoReal - efectivoEsperado;
+  const diferenciaEl = document.getElementById('corte-diferencia');
+  diferenciaEl.value = formatoMoneda(diferencia);
+  diferenciaEl.style.color = diferencia < 0 ? 'var(--red)' : (diferencia > 0 ? 'var(--amber)' : 'var(--green)');
+};
+
+window.guardarCorteCaja = async function(){
+  const fecha = document.getElementById('corte-fecha').value;
+  if (!fecha){
+    alert('Selecciona una fecha');
+    return;
+  }
+
+  try {
+    await db.collection('cortes_caja_mayoreo').doc(fecha).set({
+      fecha: fecha,
+      fondo_inicial: Number(document.getElementById('corte-fondo-inicial').value) || 0,
+      efectivo_real: Number(document.getElementById('corte-efectivo-real').value) || 0,
+      efectivo_esperado_texto: document.getElementById('corte-efectivo-esperado').value,
+      diferencia_texto: document.getElementById('corte-diferencia').value,
+      cerrado_por: auth.currentUser ? auth.currentUser.email : '',
+      creado: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    alert('Corte de caja guardado');
+  } catch (err){
+    console.error('Error guardando corte de caja:', err);
+    alert('No se pudo guardar el corte. Revisa la consola.');
+  }
+};
 
 // ============================================================
 // COTIZACIONES — folio consecutivo, líneas de producto, total
@@ -1586,19 +2055,75 @@ function pedidosEnRango(desde, hasta){
   });
 }
 
-function agregarVentasPorDimension(pedidosFiltrados, campo){
+function itemsEnRango(desde, hasta){
+  const items = [];
+  pedidosEnRango(desde, hasta).forEach(p => {
+    (p.items || []).forEach(item => items.push(item));
+  });
+  return items;
+}
+
+function aplicarFiltrosReporte(items){
+  const fTipo = document.getElementById('reporte-filtro-tipo-prenda').value;
+  const fMaterial = document.getElementById('reporte-filtro-material').value;
+  const fGenero = document.getElementById('reporte-filtro-genero').value;
+  const fColor = document.getElementById('reporte-filtro-color').value;
+  const fTalla = document.getElementById('reporte-filtro-talla').value;
+
+  return items.filter(item => {
+    if (fTipo !== 'todos' && item.tipo_prenda !== fTipo) return false;
+    if (fMaterial !== 'todos' && item.material !== fMaterial) return false;
+    if (fGenero !== 'todos' && item.genero !== fGenero) return false;
+    if (fColor !== 'todos' && item.color !== fColor) return false;
+    if (fTalla !== 'todos' && item.talla !== fTalla) return false;
+    return true;
+  });
+}
+
+function agregarVentasPorDimension(items, campo){
   const acumulado = {};
-  pedidosFiltrados.forEach(p => {
-    (p.items || []).forEach(item => {
-      const clave = item[campo] || 'sin_dato';
-      if (!acumulado[clave]) acumulado[clave] = { cantidad: 0, monto: 0 };
-      const cantidad = Number(item.cantidad) || 0;
-      acumulado[clave].cantidad += cantidad;
-      acumulado[clave].monto += cantidad * (Number(item.precio_unitario) || 0);
-    });
+  items.forEach(item => {
+    const clave = item[campo] || 'sin_dato';
+    if (!acumulado[clave]) acumulado[clave] = { cantidad: 0, monto: 0 };
+    const cantidad = Number(item.cantidad) || 0;
+    acumulado[clave].cantidad += cantidad;
+    acumulado[clave].monto += cantidad * (Number(item.precio_unitario) || 0);
   });
   return acumulado;
 }
+
+function poblarFiltrosReporte(){
+  const materiales = new Set();
+  const colores = new Set();
+  const tallas = new Set();
+
+  Object.values(productosCache).forEach(p => {
+    if (p.material) materiales.add(p.material);
+    if (p.color) colores.add(p.color);
+    if (p.talla) tallas.add(p.talla);
+  });
+
+  function repoblar(selectId, valores){
+    const select = document.getElementById(selectId);
+    const valorActual = select.value;
+    select.innerHTML = '<option value="todos">Todos</option>' +
+      Array.from(valores).sort().map(v => `<option value="${v}">${etiquetaGenerica(v)}</option>`).join('');
+    if (Array.from(valores).includes(valorActual)) select.value = valorActual;
+  }
+
+  repoblar('reporte-filtro-material', materiales);
+  repoblar('reporte-filtro-color', colores);
+  repoblar('reporte-filtro-talla', tallas);
+}
+
+window.limpiarFiltrosReporte = function(){
+  document.getElementById('reporte-filtro-tipo-prenda').value = 'todos';
+  document.getElementById('reporte-filtro-material').value = 'todos';
+  document.getElementById('reporte-filtro-genero').value = 'todos';
+  document.getElementById('reporte-filtro-color').value = 'todos';
+  document.getElementById('reporte-filtro-talla').value = 'todos';
+  window.actualizarReporte();
+};
 
 function renderRanking(containerId, acumulado, etiquetaFn){
   const contenedor = document.getElementById(containerId);
@@ -1607,7 +2132,7 @@ function renderRanking(containerId, acumulado, etiquetaFn){
   const entradas = Object.entries(acumulado).sort((a, b) => b[1].cantidad - a[1].cantidad);
 
   if (entradas.length === 0){
-    contenedor.innerHTML = '<p class="empty-state" style="padding:16px 0;">Sin ventas en este período</p>';
+    contenedor.innerHTML = '<p class="empty-state" style="padding:16px 0;">Sin ventas que coincidan con el filtro</p>';
     return;
   }
 
@@ -1637,15 +2162,17 @@ window.actualizarReporte = function(){
     return;
   }
 
-  const pedidosFiltrados = pedidosEnRango(desde, hasta);
-  document.getElementById('reporte-resumen').textContent =
-    `${pedidosFiltrados.length} pedido(s) del ${desde.toLocaleDateString('es-MX')} al ${hasta.toLocaleDateString('es-MX')}`;
+  const totalPedidos = pedidosEnRango(desde, hasta).length;
+  const itemsFiltrados = aplicarFiltrosReporte(itemsEnRango(desde, hasta));
 
-  renderRanking('reporte-tipo-prenda', agregarVentasPorDimension(pedidosFiltrados, 'tipo_prenda'), v => etiquetasTipoPrenda[v] || etiquetaGenerica(v));
-  renderRanking('reporte-material', agregarVentasPorDimension(pedidosFiltrados, 'material'));
-  renderRanking('reporte-genero', agregarVentasPorDimension(pedidosFiltrados, 'genero'), v => etiquetasGeneroReporte[v] || etiquetaGenerica(v));
-  renderRanking('reporte-color', agregarVentasPorDimension(pedidosFiltrados, 'color'));
-  renderRanking('reporte-talla', agregarVentasPorDimension(pedidosFiltrados, 'talla'));
+  document.getElementById('reporte-resumen').textContent =
+    `${totalPedidos} pedido(s) del ${desde.toLocaleDateString('es-MX')} al ${hasta.toLocaleDateString('es-MX')} · ${itemsFiltrados.length} línea(s) coinciden con el filtro`;
+
+  renderRanking('reporte-tipo-prenda', agregarVentasPorDimension(itemsFiltrados, 'tipo_prenda'), v => etiquetasTipoPrenda[v] || etiquetaGenerica(v));
+  renderRanking('reporte-material', agregarVentasPorDimension(itemsFiltrados, 'material'));
+  renderRanking('reporte-genero', agregarVentasPorDimension(itemsFiltrados, 'genero'), v => etiquetasGeneroReporte[v] || etiquetaGenerica(v));
+  renderRanking('reporte-color', agregarVentasPorDimension(itemsFiltrados, 'color'));
+  renderRanking('reporte-talla', agregarVentasPorDimension(itemsFiltrados, 'talla'));
 };
 
 function cargarPedidos(){
@@ -1917,6 +2444,7 @@ window.marcarCompraRecibida = async function(compraId){
 document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-MX', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
 });
+document.getElementById('corte-fecha').value = new Date().toISOString().slice(0, 10);
 
 // ============================================================
 // CARGA INICIAL DE KPIs (placeholder — reemplazar con consultas reales)
